@@ -26,7 +26,8 @@ Getting Started
 ----------------------------
 A quick and easy paginator example:
 
-.. code:: py
+.. code:: py3
+
     from discord.ext import commands
     from discord.ext import buttons
 
