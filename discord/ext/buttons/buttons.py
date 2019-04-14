@@ -15,7 +15,7 @@ class Session:
         A bool indicating whether or not the session should try to remove reactions after they have been pressed.
     """
 
-    def __init__(self,*, timeout: int=180, try_remove: bool=True):
+    def __init__(self, *, timeout: int = 180, try_remove: bool = True):
         self._buttons = {}
         self._gather_buttons()
 
@@ -32,8 +32,14 @@ class Session:
 
     def _gather_buttons(self):
         for _, member in inspect.getmembers(self):
-            if hasattr(member, '__button__'):
-                self._buttons[member.__button__[0]] = member.__button__[1]
+            if hasattr(member, '__button__'):  # Check if the member is a button...
+                self._buttons[member.__button__[2], member.__button__[0]] = member.__button__[1]  # pos, key, value
+
+    def sort_buttons(self, *, buttons: dict = None):
+        if not buttons:
+            buttons = self.buttons
+
+        return {k[1]: v for k, v in sorted(buttons.items(), key=lambda t: t[0])}
 
     async def start(self, ctx, page=None):
         """Start the session with the given page.
@@ -57,14 +63,17 @@ class Session:
         self._session_task = ctx.bot.loop.create_task(self._session(ctx))
 
     async def _session(self, ctx):
+        self.buttons = self.sort_buttons()
+
         for reaction in self.buttons.keys():
             ctx.bot.loop.create_task(self._add_reaction(reaction))
 
         while True:
             try:
-                payload = await ctx.bot.wait_for('raw_reaction_add', timeout=self.timeout, check=lambda _: self.check(_)(ctx))
+                payload = await ctx.bot.wait_for('raw_reaction_add', timeout=self.timeout,
+                                                 check=lambda _: self.check(_)(ctx))
             except asyncio.TimeoutError:
-                return await self.cancel(ctx)
+                return ctx.bot.loop.create_task(self.cancel(ctx))
 
             if self._try_remove:
                 try:
@@ -110,6 +119,7 @@ class Session:
             elif payload.user_id != ctx.author.id:
                 return False
             return True
+
         return inner
 
 
@@ -145,17 +155,17 @@ class Paginator(Session):
         Only available when embed=True. The thumbnail URL to set for the embeded pages.
     """
 
-    def __init__(self, *, title: str='', length: int=10, entries: list=None,
-                 extra_pages: list=None, prefix: str='', suffix: str='', format: str='',
-                 colour: Union[int, discord.Colour]=discord.Embed.Empty,
-                 color: Union[int, discord.Colour]=discord.Embed.Empty, use_defaults: bool=True, embed: bool=True,
-                 joiner: str='\n', timeout: int=180, thumbnail: str=None):
+    def __init__(self, *, title: str = '', length: int = 10, entries: list = None,
+                 extra_pages: list = None, prefix: str = '', suffix: str = '', format: str = '',
+                 colour: Union[int, discord.Colour] = discord.Embed.Empty,
+                 color: Union[int, discord.Colour] = discord.Embed.Empty, use_defaults: bool = True, embed: bool = True,
+                 joiner: str = '\n', timeout: int = 180, thumbnail: str = None):
         super().__init__()
-        self._defaults = {'⏮': partial(self._default_indexer, 'start'),
-                          '◀': partial(self._default_indexer, -1),
-                          '⏹': partial(self._default_indexer, 'stop'),
-                          '▶': partial(self._default_indexer, +1),
-                          '⏭': partial(self._default_indexer, 'end')}
+        self._defaults = {(0, '⏮'): partial(self._default_indexer, 'start'),
+                          (1, '◀'): partial(self._default_indexer, -1),
+                          (2, '⏹'): partial(self._default_indexer, 'stop'),
+                          (3, '▶'): partial(self._default_indexer, +1),
+                          (4, '⏭'): partial(self._default_indexer, 'end')}
 
         self.buttons = {}
 
@@ -233,14 +243,17 @@ class Paginator(Session):
         else:
             self.buttons = self._buttons
 
+        self.buttons = self.sort_buttons()
+
         for reaction in self.buttons.keys():
             ctx.bot.loop.create_task(self._add_reaction(reaction))
 
         while True:
             try:
-                payload = await ctx.bot.wait_for('raw_reaction_add', timeout=self.timeout, check=lambda _: self.check(_)(ctx))
+                payload = await ctx.bot.wait_for('raw_reaction_add', timeout=self.timeout,
+                                                 check=lambda _: self.check(_)(ctx))
             except asyncio.TimeoutError:
-                return await self.cancel(ctx)
+                return ctx.bot.loop.create_task(self.cancel(ctx))
 
             if self._try_remove:
                 try:
@@ -281,24 +294,28 @@ class Paginator(Session):
             await self.page.edit(content=self._pages[self._index])
 
 
-def button(emoji: str):
+def button(emoji: str, *, position: int = 666):
     """A decorator that adds a button to your interactive session class.
 
     Parameters
     -----------
     emoji: str
         The emoji to use as a button. This could be a unicode endpoint or in name:id format,
-        for custom emojis
+        for custom emojis.
+    position: int
+        The position to inject the button into.
 
     Raises
     -------
     TypeError
         The button callback is not a coroutine.
     """
+
     def deco(func):
         if not asyncio.iscoroutinefunction(func):
             raise TypeError('Button callback must be a coroutine.')
 
-        func.__button__ = (emoji, func)
+        func.__button__ = (emoji, func, position)
         return func
+
     return deco
