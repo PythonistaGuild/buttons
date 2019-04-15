@@ -1,9 +1,24 @@
 import asyncio
 import discord
 import inspect
+from concurrent.futures import TimeoutError
 from discord.ext import commands
 from functools import partial
 from typing import Union
+
+__all__ = ('Session', 'Paginator', 'button', 'inverse_button',)
+
+
+class Button:
+    __slots__ = ('_callback', '_inverse_callback', 'emoji', 'position', 'try_remove')
+
+    def __init__(self, **kwargs):
+        self._callback = kwargs.get('callback')
+        self._inverse_callback = kwargs.get('inverse_callback')
+
+        self.emoji = kwargs.get('emoji')
+        self.position = kwargs.get('position')
+        self.try_remove = kwargs.get('try_remove', True)
 
 
 class Session:
@@ -27,16 +42,32 @@ class Session:
         self.timeout = timeout
         self.buttons = self._buttons
 
+        self._defaults = {}
+
     def __init_subclass__(cls, **kwargs):
         pass
 
     def _gather_buttons(self):
         for _, member in inspect.getmembers(self):
-            if hasattr(member, '__button__'):  # Check if the member is a button...
-                self._buttons[member.__button__[2], member.__button__[0]] = member.__button__[1]  # pos, key, value
+            if hasattr(member, '__button__'):
+                button = member.__button__
+
+                sorted_ = self.sort_buttons(buttons=self._buttons)
+                try:
+                    button_ = sorted_[button.emoji]
+                except KeyError:
+                    self._buttons[button.position, button.emoji] = button
+                    continue
+
+                if button._inverse_callback:
+                    button_._inverse_callback = button._inverse_callback
+                else:
+                    button_._callback = button._callback
+
+                self._buttons[button.position, button.emoji] = button_
 
     def sort_buttons(self, *, buttons: dict = None):
-        if not buttons:
+        if buttons is None:
             buttons = self.buttons
 
         return {k[1]: v for k, v in sorted(buttons.items(), key=lambda t: t[0])}
@@ -65,26 +96,49 @@ class Session:
     async def _session(self, ctx):
         self.buttons = self.sort_buttons()
 
-        for reaction in self.buttons.keys():
-            ctx.bot.loop.create_task(self._add_reaction(reaction))
+        ctx.bot.loop.create_task(self._add_reactions(self.buttons.keys()))
 
+        await self._session_loop(ctx)
+
+    async def _session_loop(self, ctx):
         while True:
-            try:
-                payload = await ctx.bot.wait_for('raw_reaction_add', timeout=self.timeout,
-                                                 check=lambda _: self.check(_)(ctx))
-            except asyncio.TimeoutError:
+            _add = asyncio.ensure_future(ctx.bot.wait_for('raw_reaction_add', check=lambda _: self.check(_)(ctx)))
+            _remove = asyncio.ensure_future(ctx.bot.wait_for('raw_reaction_remove', check=lambda _: self.check(_)(ctx)))
+
+            done, pending = await asyncio.wait((_add, _remove), return_when=asyncio.FIRST_COMPLETED, timeout=self.timeout)
+
+            for future in pending:
+                future.cancel()
+
+            if not done:
                 return ctx.bot.loop.create_task(self.cancel(ctx))
 
-            if self._try_remove:
+            try:
+                result = done.pop()
+                payload = result.result()
+
+                if result == _add:
+                    action = True
+                else:
+                    action = False
+            except Exception:
+                return ctx.bot.loop.create_task(self.cancel(ctx))
+
+            emoji = self.get_emoji_as_string(payload.emoji)
+            button = self.buttons[emoji]
+
+            if self._try_remove and button.try_remove:
                 try:
                     await self.page.remove_reaction(payload.emoji, ctx.guild.get_member(payload.user_id))
                 except discord.HTTPException:
                     pass
 
-            emoji = self.get_emoji_as_string(payload.emoji)
-            action = self.buttons[emoji]
-
-            await action(self, ctx)
+            if action and button in self._defaults.values():
+                await button._callback(ctx)
+            elif action and button._callback:
+                await button._callback(self, ctx)
+            elif not action and button._inverse_callback:
+                await button._inverse_callback(self, ctx)
 
     @property
     def is_cancelled(self):
@@ -101,8 +155,12 @@ class Session:
         self._session_task.cancel()
         await self.page.delete()
 
-    async def _add_reaction(self, reaction):
-        await self.page.add_reaction(reaction)
+    async def _add_reactions(self, reactions):
+        for reaction in reactions:
+            try:
+                await self.page.add_reaction(reaction)
+            except discord.NotFound:
+                pass
 
     def get_emoji_as_string(self, emoji):
         return f'{emoji.name}{":" + str(emoji.id) if emoji.is_custom_emoji() else ""}'
@@ -161,11 +219,11 @@ class Paginator(Session):
                  color: Union[int, discord.Colour] = discord.Embed.Empty, use_defaults: bool = True, embed: bool = True,
                  joiner: str = '\n', timeout: int = 180, thumbnail: str = None):
         super().__init__()
-        self._defaults = {(0, '⏮'): partial(self._default_indexer, 'start'),
-                          (1, '◀'): partial(self._default_indexer, -1),
-                          (2, '⏹'): partial(self._default_indexer, 'stop'),
-                          (3, '▶'): partial(self._default_indexer, +1),
-                          (4, '⏭'): partial(self._default_indexer, 'end')}
+        self._defaults = {(0, '⏮'): Button(emoji='⏮', position=0, callback=partial(self._default_indexer, 'start')),
+                          (1, '◀'): Button(emoji='◀', position=1, callback=partial(self._default_indexer, -1)),
+                          (2, '⏹'): Button(emoji='⏹', position=2, callback=partial(self._default_indexer, 'stop')),
+                          (3, '▶'): Button(emoji='▶', position=3, callback=partial(self._default_indexer, +1)),
+                          (4, '⏭'): Button(emoji='⏭', position=4, callback=partial(self._default_indexer, 'end'))}
 
         self.buttons = {}
 
@@ -245,29 +303,9 @@ class Paginator(Session):
 
         self.buttons = self.sort_buttons()
 
-        for reaction in self.buttons.keys():
-            ctx.bot.loop.create_task(self._add_reaction(reaction))
+        ctx.bot.loop.create_task(self._add_reactions(self.buttons.keys()))
 
-        while True:
-            try:
-                payload = await ctx.bot.wait_for('raw_reaction_add', timeout=self.timeout,
-                                                 check=lambda _: self.check(_)(ctx))
-            except asyncio.TimeoutError:
-                return ctx.bot.loop.create_task(self.cancel(ctx))
-
-            if self._try_remove:
-                try:
-                    await self.page.remove_reaction(payload.emoji, ctx.guild.get_member(payload.user_id))
-                except discord.HTTPException:
-                    pass
-
-            emoji = self.get_emoji_as_string(payload.emoji)
-            action = self.buttons[emoji]
-
-            if action in self._defaults.values():
-                await action(ctx)
-            else:
-                await action(self, ctx)
+        await self._session_loop(ctx)
 
     async def _default_indexer(self, control, ctx):
         previous = self._index
@@ -294,7 +332,7 @@ class Paginator(Session):
             await self.page.edit(content=self._pages[self._index])
 
 
-def button(emoji: str, *, position: int = 666):
+def button(emoji: str, *, try_remove=True, position: int = 666):
     """A decorator that adds a button to your interactive session class.
 
     Parameters
@@ -315,7 +353,48 @@ def button(emoji: str, *, position: int = 666):
         if not asyncio.iscoroutinefunction(func):
             raise TypeError('Button callback must be a coroutine.')
 
-        func.__button__ = (emoji, func, position)
+        if hasattr(func, '__button__'):
+            button = func.__button__
+            button._callback = func
+
+            return func
+
+        func.__button__ = Button(emoji=emoji, callback=func, position=position, try_remove=try_remove)
+        return func
+
+    return deco
+
+
+def inverse_button(emoji: str = None, *, try_remove=False, position: int = 666):
+    """A decorator that adds an inverted button to your interactive session class.
+
+    The inverse button will work when a reaction is unpressed.
+
+    Parameters
+    -----------
+    emoji: str
+        The emoji to use as a button. This could be a unicode endpoint or in name:id format,
+        for custom emojis.
+    position: int
+        The position to inject the button into.
+
+    Raises
+    -------
+    TypeError
+        The button callback is not a coroutine.
+    """
+
+    def deco(func):
+        if not asyncio.iscoroutinefunction(func):
+            raise TypeError('Button callback must be a coroutine.')
+
+        if hasattr(func, '__button__'):
+            button = func.__button__
+            button._inverse_callback = func
+
+            return func
+
+        func.__button__ = Button(emoji=emoji, inverse_callback=func, position=position, try_remove=try_remove)
         return func
 
     return deco
