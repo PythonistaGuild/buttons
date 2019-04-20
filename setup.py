@@ -29,7 +29,7 @@ from setuptools import setup
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-version = '0.1.4'
+version = '0.1.7'
 
 readme = ''
 with open('README.rst') as f:

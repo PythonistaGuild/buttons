@@ -1,7 +1,6 @@
 import asyncio
 import discord
 import inspect
-from concurrent.futures import TimeoutError
 from discord.ext import commands
 from functools import partial
 from typing import Union
@@ -43,6 +42,7 @@ class Session:
         self.buttons = self._buttons
 
         self._defaults = {}
+        self._default_stop = {}
 
     def __init_subclass__(cls, **kwargs):
         pass
@@ -133,12 +133,14 @@ class Session:
                 except discord.HTTPException:
                     pass
 
-            if action and button in self._defaults.values():
-                await button._callback(ctx)
+            member = ctx.guild.get_member(payload.user_id)
+
+            if action and button in self._defaults.values() or button in self._default_stop.values():
+                await button._callback(ctx, member)
             elif action and button._callback:
-                await button._callback(self, ctx)
+                await button._callback(self, ctx, member)
             elif not action and button._inverse_callback:
-                await button._inverse_callback(self, ctx)
+                await button._inverse_callback(self, ctx, member)
 
     @property
     def is_cancelled(self):
@@ -153,7 +155,11 @@ class Session:
     async def teardown(self, ctx):
         """Clean the session up."""
         self._session_task.cancel()
-        await self.page.delete()
+
+        try:
+            await self.page.delete()
+        except discord.NotFound:
+            pass
 
     async def _add_reactions(self, reactions):
         for reaction in reactions:
@@ -224,6 +230,7 @@ class Paginator(Session):
                           (2, '⏹'): Button(emoji='⏹', position=2, callback=partial(self._default_indexer, 'stop')),
                           (3, '▶'): Button(emoji='▶', position=3, callback=partial(self._default_indexer, +1)),
                           (4, '⏭'): Button(emoji='⏭', position=4, callback=partial(self._default_indexer, 'end'))}
+        self._default_stop = {(0, '⏹'): Button(emoji='⏹', position=0, callback=partial(self._default_indexer, 'stop'))}
 
         self.buttons = {}
 
@@ -297,17 +304,20 @@ class Paginator(Session):
 
     async def _session(self, ctx):
         if self.use_defaults:
-            self.buttons = {**self._defaults, **self._buttons}
+            if len(self._pages) == 1:
+                self.buttons = {**self._default_stop, **self._buttons}
+            else:
+                self.buttons = {**self._defaults, **self._buttons}
         else:
             self.buttons = self._buttons
 
         self.buttons = self.sort_buttons()
 
-        ctx.bot.loop.create_task(self._add_reactions(self.buttons.keys()))
+        ctx.bot.loop.create_task(self._add_reactions(self.buttons))
 
         await self._session_loop(ctx)
 
-    async def _default_indexer(self, control, ctx):
+    async def _default_indexer(self, control, ctx, member):
         previous = self._index
 
         if control == 'stop':
