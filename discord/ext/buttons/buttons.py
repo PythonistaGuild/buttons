@@ -68,7 +68,7 @@ class Session:
 
     def sort_buttons(self, *, buttons: dict = None):
         if buttons is None:
-            buttons = self.buttons
+            buttons = self._buttons
 
         return {k[1]: v for k, v in sorted(buttons.items(), key=lambda t: t[0])}
 
@@ -147,12 +147,12 @@ class Session:
         """Return True if the session has been cancelled."""
         return self._cancelled
 
-    async def cancel(self, ctx):
+    async def cancel(self):
         """Cancel the session."""
         self._cancelled = True
-        await self.teardown(ctx)
+        await self.teardown()
 
-    async def teardown(self, ctx):
+    async def teardown(self):
         """Clean the session up."""
         self._session_task.cancel()
 
@@ -305,11 +305,9 @@ class Paginator(Session):
     async def _session(self, ctx):
         if self.use_defaults:
             if len(self._pages) == 1:
-                self.buttons = {**self._default_stop, **self._buttons}
+                self._buttons = {**self._default_stop, **self._buttons}
             else:
-                self.buttons = {**self._defaults, **self._buttons}
-        else:
-            self.buttons = self._buttons
+                self._buttons = {**self._defaults, **self._buttons}
 
         self.buttons = self.sort_buttons()
 
@@ -321,7 +319,7 @@ class Paginator(Session):
         previous = self._index
 
         if control == 'stop':
-            return await self.cancel(ctx)
+            return await self.cancel()
 
         if control == 'end':
             self._index = len(self._pages) - 1
