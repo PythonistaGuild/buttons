@@ -38,11 +38,11 @@ A quick and easy paginator example:
             super().__init__(*args, **kwargs)
 
         @buttons.button(emoji='\u23FA')
-        async def record_button(self, ctx):
+        async def record_button(self, ctx, member):
             await ctx.send('This button sends a silly message! But could be programmed to do much more.')
 
         @buttons.button(emoji='my_custom_emoji:1234567890')
-        async def silly_button(self, ctx):
+        async def silly_button(self, ctx, member):
             await ctx.send('Beep boop...')
 
 
