@@ -18,7 +18,7 @@ class Button:
         self.emoji = kwargs.get('emoji')
         self.position = kwargs.get('position')
         self.try_remove = kwargs.get('try_remove', True)
-
+        add
 
 class Session:
     """Interactive session class, which uses reactions as buttons.
