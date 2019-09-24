@@ -31,29 +31,30 @@ with open('requirements.txt') as f:
 
 version = '0.1.7'
 
-readme = ''
 with open('README.rst') as f:
     readme = f.read()
 
-setup(name='buttons',
-      author='EvieePy',
-      url='https://github.com/EvieePy/buttons',
-      version=version,
-      packages=['discord/ext/buttons'],
-      license='MIT',
-      description='A simple to use, interactive session and paginator with custom buttons for discord.py.',
-      long_description=readme,
-      include_package_data=True,
-      install_requires=requirements,
-      classifiers=[
+setup(
+    name='buttons',
+    author='EvieePy',
+    url='https://github.com/EvieePy/buttons',
+    version=version,
+    packages=['discord/ext/buttons'],
+    license='MIT',
+    description='A simple to use, interactive session and paginator with custom buttons for discord.py.',
+    long_description=readme,
+    include_package_data=True,
+    install_requires=requirements,
+    classifiers=[
         'License :: OSI Approved :: MIT License',
         'Intended Audience :: Developers',
         'Natural Language :: English',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Internet',
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: Utilities',
-      ])
+    ]
+)

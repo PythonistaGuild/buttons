@@ -105,7 +105,11 @@ class Session:
             _add = asyncio.ensure_future(ctx.bot.wait_for('raw_reaction_add', check=lambda _: self.check(_)(ctx)))
             _remove = asyncio.ensure_future(ctx.bot.wait_for('raw_reaction_remove', check=lambda _: self.check(_)(ctx)))
 
-            done, pending = await asyncio.wait((_add, _remove), return_when=asyncio.FIRST_COMPLETED, timeout=self.timeout)
+            done, pending = await asyncio.wait(
+                (_add, _remove),
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=self.timeout
+            )
 
             for future in pending:
                 future.cancel()
