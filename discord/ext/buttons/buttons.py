@@ -113,7 +113,7 @@ class Session:
                 future.cancel()
 
             if not done:
-                return ctx.bot.loop.create_task(self.cancel(ctx))
+                return ctx.bot.loop.create_task(self.cancel())
 
             try:
                 result = done.pop()
@@ -124,7 +124,7 @@ class Session:
                 else:
                     action = False
             except Exception:
-                return ctx.bot.loop.create_task(self.cancel(ctx))
+                return ctx.bot.loop.create_task(self.cancel())
 
             emoji = self.get_emoji_as_string(payload.emoji)
             button = self.buttons[emoji]
