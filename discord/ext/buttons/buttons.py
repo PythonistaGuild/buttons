@@ -210,7 +210,7 @@ class Paginator(Session):
         Only available when embed=True. The colour of the embeded pages.
     author: Optional[str]
         Option which sets the author of the embed to the str provided.
-    author_url: Optional[str]
+    author_icon_url: Optional[str]
         Option which sets the icon_url for the author field. Requires an author to be set to work.
     use_defaults: bool
         Option which determines whether we should use default buttons as well. This is True by default.
