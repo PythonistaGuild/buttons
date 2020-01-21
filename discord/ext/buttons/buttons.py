@@ -22,7 +22,6 @@ class Button:
 
 class Session:
     """Interactive session class, which uses reactions as buttons.
-
     timeout: int
         The timeout in seconds to wait for reaction responses.
     try_remove: bool
@@ -74,7 +73,6 @@ class Session:
 
     async def start(self, ctx, page=None):
         """Start the session with the given page.
-
         Parameters
         -----------
         page: Optional[str, discord.Embed, discord.Message]
@@ -115,7 +113,7 @@ class Session:
                 future.cancel()
 
             if not done:
-                return ctx.bot.loop.create_task(self.cancel())
+                return ctx.bot.loop.create_task(self.cancel(ctx))
 
             try:
                 result = done.pop()
@@ -126,25 +124,25 @@ class Session:
                 else:
                     action = False
             except Exception:
-                return ctx.bot.loop.create_task(self.cancel())
+                return ctx.bot.loop.create_task(self.cancel(ctx))
 
             emoji = self.get_emoji_as_string(payload.emoji)
             button = self.buttons[emoji]
 
             if self._try_remove and button.try_remove:
                 try:
-                    await self.page.remove_reaction(payload.emoji, ctx.guild.get_member(payload.user_id))
+                    await self.page.remove_reaction(payload.emoji, ctx.bot.get_user(payload.user_id))
                 except discord.HTTPException:
                     pass
 
-            member = ctx.guild.get_member(payload.user_id)
+            user = ctx.bot.get_user(payload.user_id)
 
             if action and button in self._defaults.values() or button in self._default_stop.values():
-                await button._callback(ctx, member)
+                await button._callback(ctx, user)
             elif action and button._callback:
-                await button._callback(self, ctx, member)
+                await button._callback(self, ctx, user)
             elif not action and button._inverse_callback:
-                await button._inverse_callback(self, ctx, member)
+                await button._inverse_callback(self, ctx, user)
 
     @property
     def is_cancelled(self):
@@ -193,7 +191,6 @@ class Session:
 
 class Paginator(Session):
     """Paginator class, that used an interactive session to display buttons.
-
     title: str
         Only available when embed=True. The title of the embeded pages.
     length: int
@@ -211,6 +208,10 @@ class Paginator(Session):
         E.g to wrap **Entry**, we would only provide **.
     colour: discord.Colour
         Only available when embed=True. The colour of the embeded pages.
+    author: Optional[str]
+        Option which sets the author of the embed to the str provided.
+    author_url: Optional[str]
+        Option which sets the icon_url for the author field. Requires an author to be set to work.
     use_defaults: bool
         Option which determines whether we should use default buttons as well. This is True by default.
     embed: bool
@@ -225,7 +226,7 @@ class Paginator(Session):
 
     def __init__(self, *, title: str = '', length: int = 10, entries: list = None,
                  extra_pages: list = None, prefix: str = '', suffix: str = '', format: str = '',
-                 colour: Union[int, discord.Colour] = discord.Embed.Empty,
+                 colour: Union[int, discord.Colour] = discord.Embed.Empty, author: str = None, author_icon_url: str = None,
                  color: Union[int, discord.Colour] = discord.Embed.Empty, use_defaults: bool = True, embed: bool = True,
                  joiner: str = '\n', timeout: int = 180, thumbnail: str = None):
         super().__init__()
@@ -235,7 +236,6 @@ class Paginator(Session):
                           (3, '▶'): Button(emoji='▶', position=3, callback=partial(self._default_indexer, +1)),
                           (4, '⏭'): Button(emoji='⏭', position=4, callback=partial(self._default_indexer, 'end'))}
         self._default_stop = {(0, '⏹'): Button(emoji='⏹', position=0, callback=partial(self._default_indexer, 'stop'))}
-
         self.buttons = {}
 
         self.page: discord.Message = None
@@ -247,6 +247,8 @@ class Paginator(Session):
         self.title = title
         self.colour = colour or color
         self.thumbnail = thumbnail
+        self.author = author
+        self.author_icon_url = author_icon_url
         self.length = length
         self.timeout = timeout
         self.entries = entries
@@ -294,7 +296,10 @@ class Paginator(Session):
 
                 if self.thumbnail:
                     embed.set_thumbnail(url=self.thumbnail)
-
+                if self.author:
+                    embed.set_author(name=self.author)
+                elif self.author and self.author_icon_url:
+                    embed.set_author(name=self.author, icon_url=self.author_icon_url)
                 self._pages.append(embed)
 
         self._pages = self._pages + self.extra_pages
@@ -319,7 +324,7 @@ class Paginator(Session):
 
         await self._session_loop(ctx)
 
-    async def _default_indexer(self, control, ctx, member):
+    async def _default_indexer(self, control, ctx, user):
         previous = self._index
 
         if control == 'stop':
@@ -346,7 +351,6 @@ class Paginator(Session):
 
 def button(emoji: str, *, try_remove=True, position: int = 666):
     """A decorator that adds a button to your interactive session class.
-
     Parameters
     -----------
     emoji: str
@@ -354,7 +358,6 @@ def button(emoji: str, *, try_remove=True, position: int = 666):
         for custom emojis.
     position: int
         The position to inject the button into.
-
     Raises
     -------
     TypeError
@@ -379,9 +382,7 @@ def button(emoji: str, *, try_remove=True, position: int = 666):
 
 def inverse_button(emoji: str = None, *, try_remove=False, position: int = 666):
     """A decorator that adds an inverted button to your interactive session class.
-
     The inverse button will work when a reaction is unpressed.
-
     Parameters
     -----------
     emoji: str
@@ -389,7 +390,6 @@ def inverse_button(emoji: str = None, *, try_remove=False, position: int = 666):
         for custom emojis.
     position: int
         The position to inject the button into.
-
     Raises
     -------
     TypeError
