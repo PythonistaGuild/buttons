@@ -22,7 +22,7 @@ class Button:
 
 class Session:
     """Interactive session class, which uses reactions as buttons.
-    
+
     timeout: int
         The timeout in seconds to wait for reaction responses.
     try_remove: bool
@@ -74,7 +74,7 @@ class Session:
 
     async def start(self, ctx, page=None):
         """Start the session with the given page.
-        
+
         Parameters
         -----------
         page: Optional[str, discord.Embed, discord.Message]
@@ -193,7 +193,7 @@ class Session:
 
 class Paginator(Session):
     """Paginator class, that used an interactive session to display buttons.
-    
+
     title: str
         Only available when embed=True. The title of the embeded pages.
     length: int
@@ -354,7 +354,7 @@ class Paginator(Session):
 
 def button(emoji: str, *, try_remove=True, position: int = 666):
     """A decorator that adds a button to your interactive session class.
-    
+
     Parameters
     -----------
     emoji: str
@@ -362,6 +362,7 @@ def button(emoji: str, *, try_remove=True, position: int = 666):
         for custom emojis.
     position: int
         The position to inject the button into.
+
     Raises
     -------
     TypeError
@@ -386,9 +387,9 @@ def button(emoji: str, *, try_remove=True, position: int = 666):
 
 def inverse_button(emoji: str = None, *, try_remove=False, position: int = 666):
     """A decorator that adds an inverted button to your interactive session class.
-    
+
     The inverse button will work when a reaction is unpressed.
-    
+
     Parameters
     -----------
     emoji: str
@@ -396,7 +397,7 @@ def inverse_button(emoji: str = None, *, try_remove=False, position: int = 666):
         for custom emojis.
     position: int
         The position to inject the button into.
-        
+
     Raises
     -------
     TypeError
