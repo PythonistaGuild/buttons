@@ -33,6 +33,7 @@ A quick and easy paginator example:
 
 .. code:: py3
 
+    import discord
     from discord.ext import commands
     from discord.ext import buttons
 
@@ -51,7 +52,10 @@ A quick and easy paginator example:
             await ctx.send('Beep boop...')
 
 
-    bot = commands.Bot(command_prefix='??')
+    intents = discord.Intents.default()
+    intents.members = True
+
+    bot = commands.Bot(command_prefix='??', intents=intents)
 
 
     @bot.command()
