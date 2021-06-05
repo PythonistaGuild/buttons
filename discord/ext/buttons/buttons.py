@@ -221,13 +221,15 @@ class Paginator(Session):
         The timeout in seconds to wait for reaction responses.
     thumbnail:
         Only available when embed=True. The thumbnail URL to set for the embeded pages.
+    private: bool
+        if true send the author PM default is False
     """
 
     def __init__(self, *, title: str = '', length: int = 10, entries: list = None,
                  extra_pages: list = None, prefix: str = '', suffix: str = '', format: str = '',
                  colour: Union[int, discord.Colour] = discord.Embed.Empty,
                  color: Union[int, discord.Colour] = discord.Embed.Empty, use_defaults: bool = True, embed: bool = True,
-                 joiner: str = '\n', timeout: int = 180, thumbnail: str = None):
+                 joiner: str = '\n', timeout: int = 180, thumbnail: str = None, private: bool = False):
         super().__init__()
         self._defaults = {(0, '⏮'): Button(emoji='⏮', position=0, callback=partial(self._default_indexer, 'start')),
                           (1, '◀'): Button(emoji='◀', position=1, callback=partial(self._default_indexer, -1)),
@@ -258,6 +260,7 @@ class Paginator(Session):
         self.joiner = joiner
         self.use_defaults = use_defaults
         self.use_embed = embed
+        self.private = private
 
     def chunker(self):
         """Create chunks of our entries for pagination."""
@@ -300,9 +303,15 @@ class Paginator(Session):
         self._pages = self._pages + self.extra_pages
 
         if isinstance(self._pages[0], discord.Embed):
-            self.page = await ctx.send(embed=self._pages[0])
+            if self.private:
+                self.page = await ctx.author.send(embed=self._pages[0])
+            else:
+                self.page = await ctx.send(embed=self._pages[0])
         else:
-            self.page = await ctx.send(self._pages[0])
+            if self.private:
+                self.page = await ctx.author.send(self._pages[0])
+            else:
+                self.page = await ctx.send(self._pages[0])
 
         self._session_task = ctx.bot.loop.create_task(self._session(ctx))
 
