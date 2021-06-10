@@ -4,6 +4,7 @@ import inspect
 from discord.ext import commands
 from functools import partial
 from typing import Union
+from datetime import datetime
 
 __all__ = ('Session', 'Paginator', 'button', 'inverse_button',)
 
@@ -221,13 +222,19 @@ class Paginator(Session):
         The timeout in seconds to wait for reaction responses.
     thumbnail:
         Only available when embed=True. The thumbnail URL to set for the embeded pages.
+    private: bool
+        if true send the author PM default is False
+    timestamp: bool
+        Only available when embed=True. add timestamp for the embed
+    page_idx: int
+        Default is 0 and its not working on private
     """
 
     def __init__(self, *, title: str = '', length: int = 10, entries: list = None,
                  extra_pages: list = None, prefix: str = '', suffix: str = '', format: str = '',
                  colour: Union[int, discord.Colour] = discord.Embed.Empty,
                  color: Union[int, discord.Colour] = discord.Embed.Empty, use_defaults: bool = True, embed: bool = True,
-                 joiner: str = '\n', timeout: int = 180, thumbnail: str = None):
+                 joiner: str = '\n', timeout: int = 180, thumbnail: str = None, private: bool = False, timestamp: bool = False, page_idx: int = 0):
         super().__init__()
         self._defaults = {(0, '⏮'): Button(emoji='⏮', position=0, callback=partial(self._default_indexer, 'start')),
                           (1, '◀'): Button(emoji='◀', position=1, callback=partial(self._default_indexer, -1)),
@@ -257,7 +264,10 @@ class Paginator(Session):
         self.format = format
         self.joiner = joiner
         self.use_defaults = use_defaults
+        self.private = private
         self.use_embed = embed
+        self.timestamp = timestamp
+        self.page_idx = page_idx
 
     def chunker(self):
         """Create chunks of our entries for pagination."""
@@ -291,7 +301,8 @@ class Paginator(Session):
                 self._pages.append(self.joiner.join(chunk))
             else:
                 embed = discord.Embed(title=self.title, description=self.joiner.join(chunk), colour=self.colour)
-
+                if self.timestamp:
+                    embed.timestamp = datetime.utcnow()
                 if self.thumbnail:
                     embed.set_thumbnail(url=self.thumbnail)
 
@@ -299,16 +310,21 @@ class Paginator(Session):
 
         self._pages = self._pages + self.extra_pages
 
-        if isinstance(self._pages[0], discord.Embed):
-            self.page = await ctx.send(embed=self._pages[0])
+        if isinstance(self._pages[self.page_idx], discord.Embed):
+            if self.private:
+                self.page = await ctx.author.send(embed=self._pages[self.page_idx])
+            else:
+                self.page = await ctx.send(embed=self._pages[self.page_idx])
         else:
-            self.page = await ctx.send(self._pages[0])
-
+            if self.private:
+                self.page = await ctx.author.send(self._pages[self.page_idx])
+            else:
+                self.page = await ctx.send(self._pages[self.page_idx])
         self._session_task = ctx.bot.loop.create_task(self._session(ctx))
 
     async def _session(self, ctx):
         if self.use_defaults:
-            if len(self._pages) == 1:
+            if len(self._pages) == 1 or self.page_idx > 0:
                 self._buttons = {**self._default_stop, **self._buttons}
             else:
                 self._buttons = {**self._defaults, **self._buttons}
